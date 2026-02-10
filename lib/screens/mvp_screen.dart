@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../ml/tomato_classifier.dart';
 import '../ml/xai_occlusion.dart';
 import '../ml/heatmap_overlay.dart';
+import '../ml/model_variants.dart';
 
 class MvpScreen extends StatefulWidget {
   const MvpScreen({super.key});
@@ -25,7 +26,11 @@ class _MvpScreenState extends State<MvpScreen> {
   bool _busy = false;
 
   double _alpha = 0.45;
-  int _grid = 8; // smaller = faster (6=36 runs, 5=25 runs)
+  int _grid = 8;
+
+  ModelVariant _variant = ModelVariant.dynamic;
+
+  int _jobId = 0; // cancel old work
 
   @override
   void initState() {
@@ -34,8 +39,30 @@ class _MvpScreenState extends State<MvpScreen> {
   }
 
   Future<void> _init() async {
-    await _clf.load();
+    await _clf.load(variant: _variant);
+    if (!mounted) return;
     setState(() => _loadingModel = false);
+  }
+
+  Future<void> _changeModel(ModelVariant v) async {
+    setState(() {
+      _busy = true;
+      _variant = v;
+      _pred = null;
+      _overlayBytes = null;
+    });
+
+    try {
+      await _clf.load(variant: v);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Model load failed: $e")),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() => _busy = false);
+    }
   }
 
   Future<void> _pick(ImageSource src) async {
@@ -52,36 +79,66 @@ class _MvpScreenState extends State<MvpScreen> {
 
   Future<void> _predict() async {
     if (_imgBytes == null) return;
+
     setState(() => _busy = true);
+
     try {
       final p = _clf.predict(_imgBytes!);
+      if (!mounted) return;
       setState(() => _pred = p);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Predict error: $e")),
+      );
     } finally {
+      if (!mounted) return;
       setState(() => _busy = false);
     }
   }
 
   Future<void> _explain() async {
     if (_imgBytes == null || _pred == null) return;
+
+    // If abstained, do not run XAI
+    if (_pred!.abstained) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Uncertain prediction. Retake photo for XAI.")),
+      );
+      return;
+    }
+
+    final myJob = ++_jobId;
+
     setState(() => _busy = true);
 
     try {
       final heatmap = await OcclusionXAI.explain(
         originalImageBytes: _imgBytes!,
-        interpreter: _clf.interpreter,
-        numClasses: _clf.labels.length,
+        clf: _clf,
         targetClass: _pred!.index,
         grid: _grid,
       );
 
-      final overlay = overlayHeatmap(
+      // if user started new job, ignore old result
+      if (myJob != _jobId) return;
+
+      final overlay = overlayHeatmapV2(
         originalBytes: _imgBytes!,
         heatmap: heatmap,
         alpha: _alpha,
+        clipLow: 0.55,
       );
 
+      if (!mounted) return;
       setState(() => _overlayBytes = overlay);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("XAI error: $e")),
+      );
     } finally {
+      if (!mounted) return;
       setState(() => _busy = false);
     }
   }
@@ -99,11 +156,34 @@ class _MvpScreenState extends State<MvpScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text("Tomato XAI MVP")),
+      appBar: AppBar(title: const Text("Tomato XAI MVP (v2)")),
       body: Padding(
         padding: const EdgeInsets.all(12),
         child: Column(
           children: [
+            // Model selector
+            Row(
+              children: [
+                const Text("Model: "),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: DropdownButton<ModelVariant>(
+                    value: _variant,
+                    isExpanded: true,
+                    onChanged: _busy ? null : (v) => _changeModel(v!),
+                    items: ModelVariant.values
+                        .map((v) => DropdownMenuItem(
+                      value: v,
+                      child: Text(v.title),
+                    ))
+                        .toList(),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 10),
+
             Row(
               children: [
                 Expanded(
@@ -134,11 +214,21 @@ class _MvpScreenState extends State<MvpScreen> {
               ),
             ),
 
-            if (_pred != null)
+            if (_pred != null) ...[
               Text(
                 "${_pred!.label}  •  ${(100 * _pred!.confidence).toStringAsFixed(1)}%",
                 style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
+              if (_pred!.abstained && _pred!.note != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(
+                    _pred!.note!,
+                    style: const TextStyle(color: Colors.redAccent),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+            ],
 
             const SizedBox(height: 10),
 
@@ -164,7 +254,7 @@ class _MvpScreenState extends State<MvpScreen> {
 
             Row(
               children: [
-                const Text("XAI speed"),
+                const Text("XAI grid"),
                 Expanded(
                   child: Slider(
                     value: _grid.toDouble(),
