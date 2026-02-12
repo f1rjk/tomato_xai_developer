@@ -3,8 +3,8 @@ class ConfidencePolicy {
   final double margin;  // best - secondBest must be >= margin
 
   const ConfidencePolicy({
-    this.tau = 0.55,
-    this.margin = 0.08,
+    this.tau = 0.85,
+    this.margin = 0.00,
   });
 
   bool shouldAbstain(List<double> probs) {

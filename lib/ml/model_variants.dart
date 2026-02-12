@@ -4,11 +4,11 @@ extension ModelVariantX on ModelVariant {
   String get title {
     switch (this) {
       case ModelVariant.fp32:
-        return "FP32 (Most accurate)";
+        return "FP32";
       case ModelVariant.dynamic:
-        return "Dynamic (Recommended)";
+        return "Dynamic";
       case ModelVariant.int8:
-        return "INT8 (Fast, low accuracy)";
+        return "INT8";
     }
   }
 

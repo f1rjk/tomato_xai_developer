@@ -43,25 +43,20 @@ class TomatoClassifier {
   Future<void> load({required ModelVariant variant}) async {
     _variant = variant;
 
-    // Close old interpreter if exists
     _interpreter?.close();
+    _interpreter = null;
 
-    // Load new interpreter
     _interpreter = await Interpreter.fromAsset(variant.assetPath);
 
-    // Load labels
-    final labelsJson =
-    await rootBundle.loadString('assets/models/class_names.json');
+    final labelsJson = await rootBundle.loadString('assets/models/class_names.json');
     final decoded = json.decode(labelsJson) as List<dynamic>;
     _labels = decoded.map((e) => e.toString()).toList();
   }
 
   Prediction predict(Uint8List imageBytes) {
     final resized = ImagePreprocess.decodeCropResize(imageBytes);
-
     final probs = _runProbsFromResized(resized);
 
-    // Argmax
     int best = 0;
     double bestScore = probs[0];
     for (int i = 1; i < probs.length; i++) {
@@ -79,7 +74,7 @@ class TomatoClassifier {
         index: best,
         probs: probs,
         abstained: true,
-        note: "Not confident. Try a clearer close-up leaf photo with good light.",
+        note: "Not confident. Retake a close-up leaf photo with good light.",
       );
     }
 
@@ -91,26 +86,20 @@ class TomatoClassifier {
     );
   }
 
-  /// Used by XAI too (occlusion repeatedly calls this)
+  /// Used by XAI occlusion
   List<double> runProbsForImage(img.Image resized224) => _runProbsFromResized(resized224);
 
   List<double> _runProbsFromResized(img.Image resized224) {
     final inTensor = interpreter.getInputTensor(0);
     final outTensor = interpreter.getOutputTensor(0);
 
-    final TensorType inType = inTensor.type;   // ✅ TensorType (not TfLiteType)
+    final TensorType inType = inTensor.type;
     final TensorType outType = outTensor.type;
 
-    final inParams = inTensor.params;   // has scale & zeroPoint for quant models
+    final inParams = inTensor.params;   // scale/zeroPoint for quant
     final outParams = outTensor.params;
 
-    final input = _makeInput4D(
-      resized224,
-      inType,
-      inParams.scale,
-      inParams.zeroPoint,
-    );
-
+    final input = _makeInput4D(resized224, inType, inParams.scale, inParams.zeroPoint);
     final output = _makeOutput2D(labels.length, outType);
 
     interpreter.run(input, output);
@@ -118,38 +107,26 @@ class TomatoClassifier {
     return _decodeOutput(output, outType, outParams.scale, outParams.zeroPoint);
   }
 
-  Object _makeInput4D(
-      img.Image image,
-      TensorType type,
-      double scale,
-      int zeroPoint,
-      ) {
-    // If quant params are missing/0, fallback safely
+  Object _makeInput4D(img.Image image, TensorType type, double scale, int zeroPoint) {
     final double s = (scale == 0.0) ? (1.0 / 255.0) : scale;
 
     num q(double v01) {
       if (type == TensorType.float32) return v01;
 
-      // Quantize float (0..1) -> int8/uint8 using scale/zeroPoint
       final raw = (v01 / s + zeroPoint).round();
-
       if (type == TensorType.uint8) return raw.clamp(0, 255);
       if (type == TensorType.int8) return raw.clamp(-128, 127);
 
-      // If some unexpected type, still provide float
       return v01;
     }
 
-    // Shape: [1][224][224][3]
     return [
       List.generate(imgSize, (y) {
         return List.generate(imgSize, (x) {
           final p = image.getPixel(x, y);
-
           final r01 = p.r / 255.0;
           final g01 = p.g / 255.0;
           final b01 = p.b / 255.0;
-
           return [q(r01), q(g01), q(b01)];
         });
       })
@@ -157,29 +134,20 @@ class TomatoClassifier {
   }
 
   Object _makeOutput2D(int n, TensorType outType) {
-    // Shape: [1][numClasses]
     if (outType == TensorType.float32) {
       return [List<double>.filled(n, 0.0)];
     }
     if (outType == TensorType.uint8 || outType == TensorType.int8) {
       return [List<int>.filled(n, 0)];
     }
-
-    // Fallback
     return [List<double>.filled(n, 0.0)];
   }
 
-  List<double> _decodeOutput(
-      Object out2d,
-      TensorType outType,
-      double scale,
-      int zeroPoint,
-      ) {
+  List<double> _decodeOutput(Object out2d, TensorType outType, double scale, int zeroPoint) {
     if (outType == TensorType.float32) {
       return ((out2d as List)[0] as List<double>);
     }
 
-    // If quant params missing, fallback safely
     final double s = (scale == 0.0) ? (1.0 / 255.0) : scale;
 
     if (outType == TensorType.uint8 || outType == TensorType.int8) {
@@ -187,7 +155,6 @@ class TomatoClassifier {
       return row.map((q) => (q - zeroPoint) * s).toList();
     }
 
-    // Fallback
     return ((out2d as List)[0] as List<double>);
   }
 

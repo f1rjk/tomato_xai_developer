@@ -42,7 +42,6 @@ class OcclusionXAI {
       }
     }
 
-    // normalize → 0..1
     double minV = scores.reduce(min);
     double maxV = scores.reduce(max);
     final denom = (maxV - minV).abs() < 1e-9 ? 1.0 : (maxV - minV);
