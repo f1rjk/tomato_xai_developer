@@ -3,7 +3,7 @@ import 'dart:typed_data';
 extension ReshapeFloat32 on Float32List {
   List reshape(List<int> dims) {
     final b = dims[0], h = dims[1], w = dims[2], c = dims[3];
-    int idx = 0;reshape_
+    int idx = 0;
 
     final out = List.generate(
       b,

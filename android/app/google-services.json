@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "518984554979",
+    "project_id": "tomato-xai",
+    "storage_bucket": "tomato-xai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:518984554979:android:75ace81e3773d25ee268d6",
+        "android_client_info": {
+          "package_name": "com.example.tomato_xai_mvp_fixed"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8y17gLAANQjLGYPzL4nN4wVjpDQnxfJA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:518984554979:android:b4ab3c872cca0883e268d6",
+        "android_client_info": {
+          "package_name": "com.example.tomato_xai_mvp_fixed_V2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8y17gLAANQjLGYPzL4nN4wVjpDQnxfJA"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

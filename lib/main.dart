@@ -13,7 +13,7 @@ class TomatoXaiApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: "Tomato XAI MVP",
+      title: "Tomato XAI",
       theme: ThemeData(useMaterial3: true),
       home: const MvpScreen(),
     );
