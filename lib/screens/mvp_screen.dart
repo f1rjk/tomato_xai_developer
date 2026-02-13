@@ -52,7 +52,7 @@ class _MvpScreenState extends State<MvpScreen> {
   ModelVariant _variant = ModelVariant.dynamic;
 
   // Gate parameters (tune if needed)
-  double _gateTau = 0.70;
+  double _gateTau = 0.55;
   int _gateTomatoIndex = 1; // if gate outputs [nonTomato, tomato]
 
   // XAI controls
@@ -495,6 +495,13 @@ class _MvpScreenState extends State<MvpScreen> {
                     ),
                   ],
                 ),
+                  const SizedBox(height: 4),
+                  // ✅ Show loaded temperature
+                  if (_clf.interpreter != null)
+                    Text(
+                      "Temperature scaling: T=${_clf.temperature.toStringAsFixed(2)}",
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  ),
 
                 const SizedBox(height: 8),
 

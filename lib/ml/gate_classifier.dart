@@ -43,10 +43,11 @@ class GateClassifier {
   /// Supports output shapes:
   /// - [1,1] sigmoid -> tomatoScore = probs[0]
   /// - [1,2] softmax -> tomatoScore = probs[tomatoIndex] (default 1)
+// In gate_classifier.dart, modify the predict method:
   GateResult predict(
       Uint8List imageBytes, {
         double tau = 0.70,
-        int tomatoIndex = 1, // if output is [nonTomato, tomato]
+        int tomatoIndex = 1,
       }) {
     final resized = ImagePreprocess.decodeCropResize(imageBytes);
 
@@ -56,12 +57,12 @@ class GateClassifier {
     final inType = inTensor.type;
     final outType = outTensor.type;
 
-    final inParams = inTensor.params; // scale, zeroPoint
+    final inParams = inTensor.params;
     final outParams = outTensor.params;
 
     final input = _makeInput4D(resized, inType, inParams.scale, inParams.zeroPoint);
 
-    final outShape = outTensor.shape; // e.g. [1,1] or [1,2]
+    final outShape = outTensor.shape;
     final outN = (outShape.isNotEmpty) ? outShape.last : 1;
 
     final output = _makeOutput2D(outN, outType);
@@ -70,6 +71,11 @@ class GateClassifier {
 
     final probs = _decodeOutput(output, outType, outParams.scale, outParams.zeroPoint);
 
+    // 🔍 DEBUG: Print raw probabilities
+    print("🔍 Gate raw probs: $probs");
+    print("🔍 Gate output shape: $outShape");
+    print("🔍 Gate input type: $inType, output type: $outType");
+
     double tomatoScore;
     if (probs.length == 1) {
       tomatoScore = probs[0];
@@ -77,6 +83,8 @@ class GateClassifier {
       final idx = tomatoIndex.clamp(0, probs.length - 1);
       tomatoScore = probs[idx];
     }
+
+    print("🔍 Gate tomato score: $tomatoScore (threshold: $tau)");
 
     final isTomato = tomatoScore >= tau;
 
@@ -89,7 +97,6 @@ class GateClassifier {
           : "Not a tomato leaf / out of scope. Use a close-up tomato leaf photo.",
     );
   }
-
   // ---------------- helpers ----------------
 
   Object _makeInput4D(img.Image image, TensorType type, double scale, int zeroPoint) {

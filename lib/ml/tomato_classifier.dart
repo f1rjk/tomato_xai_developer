@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
@@ -35,10 +36,12 @@ class TomatoClassifier {
   Interpreter? _interpreter;
   late List<String> _labels;
   ModelVariant _variant = ModelVariant.dynamic;
+  double _temperature = 1.0; // Default, will be loaded from temperature.json
 
   Interpreter get interpreter => _interpreter!;
   List<String> get labels => _labels;
   ModelVariant get variant => _variant;
+  double get temperature => _temperature;
 
   Future<void> load({required ModelVariant variant}) async {
     _variant = variant;
@@ -48,14 +51,29 @@ class TomatoClassifier {
 
     _interpreter = await Interpreter.fromAsset(variant.assetPath);
 
+    // Load class names
     final labelsJson = await rootBundle.loadString('assets/models/class_names.json');
     final decoded = json.decode(labelsJson) as List<dynamic>;
     _labels = decoded.map((e) => e.toString()).toList();
+
+    // Load temperature scaling factor
+    try {
+      final tempJson = await rootBundle.loadString('assets/models/temperature.json');
+      final tempData = json.decode(tempJson);
+      _temperature = (tempData['T'] as num).toDouble();
+      print('✅ Loaded temperature: $_temperature');
+    } catch (e) {
+      print('⚠️ Could not load temperature.json, using T=1.0: $e');
+      _temperature = 1.0;
+    }
   }
 
   Prediction predict(Uint8List imageBytes) {
     final resized = ImagePreprocess.decodeCropResize(imageBytes);
-    final probs = _runProbsFromResized(resized);
+    var probs = _runProbsFromResized(resized);
+
+    // Apply temperature scaling for calibrated probabilities
+    probs = _applyTemperature(probs);
 
     int best = 0;
     double bestScore = probs[0];
@@ -86,8 +104,33 @@ class TomatoClassifier {
     );
   }
 
+  /// Apply temperature scaling to raw softmax probabilities
+  List<double> _applyTemperature(List<double> probs) {
+    if (_temperature == 1.0) return probs; // No scaling needed
+
+    const eps = 1e-12;
+
+    // Convert probs to logits: log(p)
+    final logits = probs.map((p) => log(p.clamp(eps, 1.0))).toList();
+
+    // Scale by temperature: logit / T
+    final scaledLogits = logits.map((l) => l / _temperature).toList();
+
+    // Subtract max for numerical stability
+    final maxLogit = scaledLogits.reduce(max);
+    final expLogits = scaledLogits.map((l) => exp(l - maxLogit)).toList();
+
+    // Normalize to get calibrated probabilities
+    final sumExp = expLogits.reduce((a, b) => a + b);
+    return expLogits.map((e) => e / sumExp).toList();
+  }
+
   /// Used by XAI occlusion
-  List<double> runProbsForImage(img.Image resized224) => _runProbsFromResized(resized224);
+  List<double> runProbsForImage(img.Image resized224) {
+    var probs = _runProbsFromResized(resized224);
+    // Apply temperature scaling for consistency
+    return _applyTemperature(probs);
+  }
 
   List<double> _runProbsFromResized(img.Image resized224) {
     final inTensor = interpreter.getInputTensor(0);

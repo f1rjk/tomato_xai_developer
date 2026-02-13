@@ -71,6 +71,7 @@ flutter:
     - assets/models/tomato_int8.tflite
     - assets/models/class_names.json
     - assets/models/gate_dynamic.tflite
+    - assets/models/temperature.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
